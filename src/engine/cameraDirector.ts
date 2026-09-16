@@ -38,9 +38,8 @@ export class CameraDirector {
   private readonly BASE_FOV: number = 68;
 
   constructor(fov: number = 68, aspect: number = 16 / 9) {
-    // Tăng near plane từ 0.1 lên 1.0 để tăng độ phân giải 24-bit depth buffer lên gấp 10 lần,
-    // triệt tiêu hoàn toàn hiện tượng nhấp nháy chồng lấn mặt đường / vạch kẻ và xé hình (z-fighting)
-    this.camera = new THREE.PerspectiveCamera(fov, aspect, 1.0, 15000);
+    // Tăng near plane từ 0.1 lên 1.0 và far plane lên 30000 để bao quát trọn đường đua tới chân trời
+    this.camera = new THREE.PerspectiveCamera(fov, aspect, 1.0, 30000);
   }
 
   setCameraMode(mode: CameraMode, manualLock: boolean = true) {
@@ -168,13 +167,13 @@ export class CameraDirector {
       this.hasStabilizedAnchor = true;
     } else {
       if (isCloseMode) {
-        // Khi quay gần hoặc xe BTC đuổi, vị trí gốc bám tức thời theo xe để triệt tiêu hoàn toàn hiện tượng lệch nhịp nảy giật xe
+        // Giảm chấn quán tính siêu mượt (Damped Smoothing) cho hướng lái xe khi ôm cua
         this.stabilizedAnchorPos.copy(carPos);
-        this.stabilizedAnchorForward.lerp(rawForward, Math.min(1.0, delta * 18.0)).normalize();
+        this.stabilizedAnchorForward.lerp(rawForward, Math.min(1.0, delta * 12.0)).normalize();
       } else {
-        const anchorSmoothSpeed = Math.min(1.0, delta * 25.0);
+        const anchorSmoothSpeed = Math.min(1.0, delta * 20.0);
         this.stabilizedAnchorPos.lerp(carPos, anchorSmoothSpeed);
-        this.stabilizedAnchorForward.lerp(rawForward, Math.min(1.0, delta * 20.0)).normalize();
+        this.stabilizedAnchorForward.lerp(rawForward, Math.min(1.0, delta * 14.0)).normalize();
       }
     }
 
@@ -193,42 +192,41 @@ export class CameraDirector {
       // =========================================================================
       case CameraMode.CHOPPER_HELI_CHASE: {
         camSmoothSpeed = 16.0;
-        const swayX = Math.sin(this.orbitAngle * 0.45) * 4.0;
-        const swayY = Math.cos(this.orbitAngle * 0.35) * 2.2;
+        const swayX = Math.sin(this.orbitAngle * 0.45) * 3.0;
+        const swayY = Math.cos(this.orbitAngle * 0.35) * 1.5;
         idealPos.copy(trackedPos)
-          .addScaledVector(forward, -26.0)
-          .addScaledVector(right, 15.0 + swayX)
-          .addScaledVector(up, 18.0 + swayY);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 12.0).addScaledVector(up, 1.0);
+          .addScaledVector(forward, -20.0)
+          .addScaledVector(right, 10.0 + swayX)
+          .addScaledVector(up, 14.0 + swayY);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 10.0).addScaledVector(up, 1.0);
         break;
       }
 
       // =========================================================================
       // GÓC QUAY DRONE BAY BÁM ĐUỔI TỪ XA (SKY DRONE BROADCAST / FLYCAM)
-      // Drone FPV bay lướt trên cao 7m, chuyển động nhịp nhàng bám sát đoàn xe xé gió
+      // Drone FPV bay lướt gần hơn, chuyển động nhịp nhàng bám sát xe
       // =========================================================================
       case CameraMode.SKY_DRONE_BROADCAST: {
         camSmoothSpeed = 20.0;
-        const droneWeave = Math.sin(this.orbitAngle * 0.75) * 3.5;
+        const droneWeave = Math.sin(this.orbitAngle * 0.75) * 2.5;
         idealPos.copy(trackedPos)
-          .addScaledVector(forward, -16.0)
+          .addScaledVector(forward, -12.0)
           .addScaledVector(right, droneWeave)
-          .addScaledVector(up, 7.0);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 14.0).addScaledVector(up, 1.0);
+          .addScaledVector(up, 5.5);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 12.0).addScaledVector(up, 1.0);
         break;
       }
 
       // =========================================================================
       // GÓC QUAY TOÀN CẢNH TỪ TRÊN CAO (PANORAMIC / GRANDSTAND)
-      // Đặt ở góc truyền hình trên cao 30m, bao quát toàn bộ khúc cua và đoàn xe so kè
       // =========================================================================
       case CameraMode.PANORAMIC: {
         camSmoothSpeed = 16.0;
         idealPos.copy(trackedPos)
-          .addScaledVector(forward, -28.0)
-          .addScaledVector(right, 24.0)
-          .addScaledVector(up, 30.0);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 12.0).addScaledVector(up, 1.0);
+          .addScaledVector(forward, -20.0)
+          .addScaledVector(right, 16.0)
+          .addScaledVector(up, 20.0);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 10.0).addScaledVector(up, 1.0);
         break;
       }
 
@@ -287,8 +285,9 @@ export class CameraDirector {
         idealPos.copy(trackedPos)
           .addScaledVector(forward, 6.0)
           .addScaledVector(right, -4.5)
-          .addScaledVector(up, 0.9);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 0.0).addScaledVector(up, 0.75);
+          .addScaledVector(up, 1.2);
+        idealPos.y = Math.max(idealPos.y, trackedPos.y + 0.5);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 0.0).addScaledVector(up, 0.85);
         break;
       }
 
@@ -424,13 +423,13 @@ export class CameraDirector {
 
       // =========================================================================
       // 16. CAMERA ÂM VỈA GỜ GIẢM TỐC (KERB_CAM_GROUND)
-      // Gầm xe sượt ngay bên trên camera với hiệu ứng tốc độ bốc lửa
+      // Nâng cao góc quay lên 1 mét so với mặt đường
       // =========================================================================
       case CameraMode.KERB_CAM_GROUND: {
         camSmoothSpeed = 20.0;
-        idealPos.copy(trackedPos).addScaledVector(right, 3.2).addScaledVector(forward, 4.0);
-        idealPos.y = Math.max(0.05, trackedPos.y - 0.45);
-        lookTarget.copy(trackedPos).addScaledVector(up, 0.35);
+        idealPos.copy(trackedPos).addScaledVector(right, 3.2).addScaledVector(forward, 4.0).addScaledVector(up, 1.45);
+        idealPos.y = Math.max(idealPos.y, trackedPos.y + 1.35);
+        lookTarget.copy(trackedPos).addScaledVector(up, 1.55);
         break;
       }
 
@@ -447,12 +446,13 @@ export class CameraDirector {
 
       // =========================================================================
       // 18. GÓC CẢN TRƯỚC SIÊU TỐC (BUMPER_FIRST_PERSON)
-      // Camera gắn sát cản trước ngay trên mặt đường nhựa bốc lửa
+      // Nâng cao góc quay cản trước lên 1 mét
       // =========================================================================
       case CameraMode.BUMPER_FIRST_PERSON: {
         camSmoothSpeed = 25.0; // Khóa cứng
-        idealPos.copy(trackedPos).addScaledVector(forward, 1.85).addScaledVector(up, 0.45);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 40.0).addScaledVector(up, 0.45);
+        idealPos.copy(trackedPos).addScaledVector(forward, 1.85).addScaledVector(up, 1.55);
+        idealPos.y = Math.max(idealPos.y, trackedPos.y + 1.4);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 40.0).addScaledVector(up, 1.55);
         break;
       }
 
@@ -460,14 +460,14 @@ export class CameraDirector {
       // === 10 GÓC QUAY CINEMATIC KINH ĐIỂN (CLASSIC CAMERAS) ===
       // =========================================================================
 
-      // 1. Phía Sau Xe: Cự ly thể thao kinh điển 22m, góc nhìn bao quát toàn bộ xe và các đối thủ xung quanh
+      // 1. Phía Sau Xe: Ôm cua mượt mà tự nhiên, hướng lượn theo đuôi xe, giữ phẳng đường chân trời (Horizon Locking)
       case CameraMode.BEHIND: {
-        camSmoothSpeed = 25.0;
-        const dist = 22.5; // Cự ly chuẩn mực bắt trọn đuôi xe, tia lửa Nitro và xe đối thủ
-        const height = 5.6; // Nâng cao góc nhìn để thấy rõ các xe phía trước đang so kè và đảo làn
+        camSmoothSpeed = 16.0; // Giảm chấn mượt mà, không bị cứng nhắc
+        const dist = 22.0; 
+        const height = 5.2; 
         idealPos.copy(trackedPos).addScaledVector(forward, -dist).addScaledVector(up, height);
         idealPos.y = Math.max(idealPos.y, trackedPos.y + 1.8);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 18.0).addScaledVector(up, 1.1);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 16.0).addScaledVector(up, 1.0);
         break;
       }
 
@@ -479,11 +479,12 @@ export class CameraDirector {
         break;
       }
 
-      // 3. Sát Mặt Đường: Góc quay sát mặt đường lốp xe xé gió
+      // 3. Sát Mặt Đường: Góc quay sát mặt đường lốp xe xé gió (đã nâng cao thêm 1 mét)
       case CameraMode.LOW_GROUND: {
         camSmoothSpeed = 25.0;
-        idealPos.copy(trackedPos).addScaledVector(forward, -5.0).addScaledVector(right, 1.3).addScaledVector(up, 0.42);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 25.0).addScaledVector(up, 0.65);
+        idealPos.copy(trackedPos).addScaledVector(forward, -5.0).addScaledVector(right, 1.3).addScaledVector(up, 1.55);
+        idealPos.y = Math.max(idealPos.y, trackedPos.y + 1.4);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 25.0).addScaledVector(up, 1.75);
         break;
       }
 
@@ -574,14 +575,17 @@ export class CameraDirector {
       if (isStationaryTrackside) {
         // Máy quay ven đường đứng yên hoàn toàn 100% không di chuyển, chỉ xoay ống kính lia theo xe
         this.smoothedCamPos.copy(idealPos);
-        this.smoothedLookTarget.lerp(lookTarget, Math.min(1.0, delta * 24.0));
-      } else if (isCloseShot) {
-        // Khi quay gần, khóa cứng chính xác vị trí và mục tiêu góc nhìn vào xe để triệt tiêu hoàn toàn hiện tượng rung lắc
-        this.smoothedCamPos.copy(idealPos);
-        this.smoothedLookTarget.copy(lookTarget);
+        this.smoothedLookTarget.lerp(lookTarget, Math.min(1.0, delta * 14.0));
       } else {
-        this.smoothedCamPos.lerp(idealPos, Math.min(1.0, delta * camSmoothSpeed));
-        this.smoothedLookTarget.lerp(lookTarget, Math.min(1.0, delta * camSmoothSpeed));
+        // Áp dụng bộ lọc quán tính siêu mượt (Cinematic Spring-Damper Damping) với độ trễ tối ưu
+        // Kết hợp biên độ dao động hữu cơ nhẹ nhàng (Steadicam Broadcast Crane Float) tạo cảm giác như máy quay truyền hình thật
+        const organicSwayX = Math.sin(this.simulatedTime * 1.4) * 0.06;
+        const organicSwayY = Math.cos(this.simulatedTime * 1.1) * 0.06;
+        const targetPosWithSway = idealPos.clone().add(new THREE.Vector3(organicSwayX, organicSwayY, 0));
+
+        const smoothFactor = Math.min(1.0, delta * (camSmoothSpeed > 0 ? camSmoothSpeed : 8.0));
+        this.smoothedCamPos.lerp(targetPosWithSway, smoothFactor);
+        this.smoothedLookTarget.lerp(lookTarget, smoothFactor);
       }
     }
 

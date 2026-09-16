@@ -633,8 +633,8 @@ export class VehiclePhysicsSystem {
         const isHighSpeed = s.speed > 430;
         const isDrifting = s.isDrifting;
 
-        // Chỉ cập nhật hạt định kỳ hoặc cho các xe đang bứt tốc/drift/dẫn đầu để tối ưu GPU và CPU
-        const shouldUpdateParticles = isSuperSpeed || isDrifting || s.rank <= 3 || Math.random() < 0.35;
+        // Chỉ cập nhật hạt khi xe thực sự đang drift, nitro boost, hoặc ở top 2 dẫn đầu
+        const shouldUpdateParticles = isDrifting || s.isHyperBoosting || (isSuperSpeed && s.rank <= 3);
 
         if (shouldUpdateParticles) {
           const posAttr = car.exhaustPuffs.geometry.attributes.position as THREE.BufferAttribute;
@@ -688,9 +688,15 @@ export class VehiclePhysicsSystem {
             mat.size = 0.45;
             mat.opacity = 0.85;
           } else {
-            mat.color.setHex(0x94a3b8); // Chạy 400 km/h: Khói xả nhẹ
+            mat.color.setHex(0x94a3b8); // Khói xả nhẹ
             mat.size = 0.25;
             mat.opacity = 0.35;
+          }
+        } else {
+          // Khi xe chạy bình thường, hạ opacity về 0 để GPU không tốn thời gian vẽ
+          const mat = car.exhaustPuffs.material as THREE.PointsMaterial;
+          if (mat.opacity > 0) {
+            mat.opacity = 0;
           }
         }
       }

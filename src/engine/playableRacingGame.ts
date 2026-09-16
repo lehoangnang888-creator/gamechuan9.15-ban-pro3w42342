@@ -246,8 +246,8 @@ export class PlayableRacingGame {
     this.dirLight.shadow.camera.bottom = -150;
     this.scene.add(this.dirLight);
 
-    // Ground plane (Mở rộng 35,000m x 35,000m cho đại lộ đua 10x)
-    const groundGeo = new THREE.PlaneGeometry(35000, 35000, 32, 32);
+    // Ground plane (Mở rộng 35,000m x 35,000m cho đại lộ đua 10x - 8x8 subdivisions tối ưu)
+    const groundGeo = new THREE.PlaneGeometry(35000, 35000, 8, 8);
     const groundMat = new THREE.MeshStandardMaterial({
       color: 0x18241b,
       roughness: 0.95,
@@ -442,33 +442,67 @@ export class PlayableRacingGame {
     rightTallLampsMesh.instanceMatrix.needsUpdate = true;
     this.trackMeshGroup.add(leftTallPolesMesh, rightTallPolesMesh, leftTallLampsMesh, rightTallLampsMesh);
 
-    // Gờ mép đường (curb) 2 bên giảm bớt và ngắt quãng thoáng đãng (giảm 4 lần)
+    // Gờ mép đường (curb) 2 bên tối ưu bằng InstancedMesh (chỉ 2 draw calls)
     const curbSegments = 90;
+    const activeCurbSegments: number[] = [];
     for (let i = 0; i < curbSegments; i += 2) {
-      if ((i / 2) % 3 === 2) continue; // Bớt đi các đoạn thừa
+      if ((i / 2) % 3 === 2) continue;
+      activeCurbSegments.push(i);
+    }
 
+    const totalCurbs = activeCurbSegments.length * 2; // trái + phải
+    const countWhite = Math.ceil(totalCurbs / 2);
+    const countRed = Math.floor(totalCurbs / 2);
+
+    const curbGeo = new THREE.BoxGeometry(0.8, 0.2, 4.0);
+    const curbMatWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+    const curbMatRed = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5 });
+
+    const whiteCurbsMesh = new THREE.InstancedMesh(curbGeo, curbMatWhite, Math.max(1, countWhite));
+    const redCurbsMesh = new THREE.InstancedMesh(curbGeo, curbMatRed, Math.max(1, countRed));
+    whiteCurbsMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    redCurbsMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+    let idxWhite = 0;
+    let idxRed = 0;
+    const curbMat4 = new THREE.Matrix4();
+    const curbPos = new THREE.Vector3();
+    const curbQuat = new THREE.Quaternion();
+    const curbScale = new THREE.Vector3(1, 1, 1);
+    const zUnit = new THREE.Vector3(0, 0, 1);
+    const yUnit = new THREE.Vector3(0, 1, 0);
+
+    for (const i of activeCurbSegments) {
       const u = i / curbSegments;
       const pt = safeGetPointAt(this.trackCurve, u);
       const tg = safeGetTangentAt(this.trackCurve, u);
-      const normal = new THREE.Vector3().crossVectors(tg, new THREE.Vector3(0, 1, 0)).normalize();
+      const normal = new THREE.Vector3().crossVectors(tg, yUnit).normalize();
+      curbQuat.setFromUnitVectors(zUnit, tg);
 
       const isWhite = (i / 2) % 2 === 0;
-      const curbMat = new THREE.MeshStandardMaterial({
-        color: isWhite ? 0xffffff : 0xef4444,
-        roughness: 0.5
-      });
 
-      const curbGeo = new THREE.BoxGeometry(0.8, 0.2, 4.0);
-      const curbL = new THREE.Mesh(curbGeo, curbMat);
-      curbL.position.copy(pt).addScaledVector(normal, -roadHalfWidth - 0.4);
-      curbL.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tg);
-      this.trackMeshGroup.add(curbL);
+      // Left curb
+      curbPos.copy(pt).addScaledVector(normal, -roadHalfWidth - 0.4);
+      curbMat4.compose(curbPos, curbQuat, curbScale);
+      if (isWhite) {
+        whiteCurbsMesh.setMatrixAt(idxWhite++, curbMat4);
+      } else {
+        redCurbsMesh.setMatrixAt(idxRed++, curbMat4);
+      }
 
-      const curbR = new THREE.Mesh(curbGeo, curbMat);
-      curbR.position.copy(pt).addScaledVector(normal, roadHalfWidth + 0.4);
-      curbR.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tg);
-      this.trackMeshGroup.add(curbR);
+      // Right curb
+      curbPos.copy(pt).addScaledVector(normal, roadHalfWidth + 0.4);
+      curbMat4.compose(curbPos, curbQuat, curbScale);
+      if (isWhite) {
+        whiteCurbsMesh.setMatrixAt(idxWhite++, curbMat4);
+      } else {
+        redCurbsMesh.setMatrixAt(idxRed++, curbMat4);
+      }
     }
+
+    whiteCurbsMesh.instanceMatrix.needsUpdate = true;
+    redCurbsMesh.instanceMatrix.needsUpdate = true;
+    this.trackMeshGroup.add(whiteCurbsMesh, redCurbsMesh);
 
     // Start / Finish Arch Gantry
     const startPt = safeGetPointAt(this.trackCurve, 0);

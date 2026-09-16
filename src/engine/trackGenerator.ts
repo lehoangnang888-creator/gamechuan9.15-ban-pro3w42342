@@ -83,8 +83,12 @@ export class TrackGenerator {
       polygonOffsetUnits: 1
     });
 
+    trackGeo.computeBoundingSphere();
+    trackGeo.computeBoundingBox();
+
     const trackMesh = new THREE.Mesh(trackGeo, trackMat);
     trackMesh.receiveShadow = true;
+    trackMesh.frustumCulled = false;
 
     // Scenery items (curbs, light poles, arches, center markings)
     const sceneryGroup = new THREE.Group();
@@ -409,7 +413,7 @@ export class TrackGenerator {
       }
     }
 
-    // Giảm bớt gờ mép đường (curb) 2 bên theo yêu cầu người dùng (giảm 4 lần, ngắt quãng thoáng đãng)
+    // Tối ưu hóa gờ mép đường (curb) 2 bên bằng InstancedMesh (chỉ 2 draw calls cho toàn bộ curbs!)
     const curbSegments = 90;
     const curbGeo = new THREE.BoxGeometry(0.8, 0.25, 8.0);
     const curbMat1 = new THREE.MeshStandardMaterial({
@@ -423,6 +427,31 @@ export class TrackGenerator {
       metalness: 0.15
     });
 
+    // Tính toán trước số lượng curbs thực tế
+    let countCurb1 = 0;
+    let countCurb2 = 0;
+    for (let c = 0; c < curbSegments; c += 2) {
+      if ((c / 2) % 3 === 2) continue;
+      if ((c / 2) % 2 === 0) {
+        countCurb1 += 2; // trái + phải
+      } else {
+        countCurb2 += 2; // trái + phải
+      }
+    }
+
+    const instancedCurb1 = new THREE.InstancedMesh(curbGeo, curbMat1, Math.max(1, countCurb1));
+    const instancedCurb2 = new THREE.InstancedMesh(curbGeo, curbMat2, Math.max(1, countCurb2));
+    instancedCurb1.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    instancedCurb2.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+    let idxCurb1 = 0;
+    let idxCurb2 = 0;
+    const _curbMat4 = new THREE.Matrix4();
+    const _curbPos = new THREE.Vector3();
+    const _curbQuat = new THREE.Quaternion();
+    const _curbScale = new THREE.Vector3(1, 1, 1);
+    const _zFwd = new THREE.Vector3(0, 0, 1);
+
     for (let c = 0; c < curbSegments; c += 2) {
       // Bớt đi các đoạn thừa, chỉ giữ lại các cụm gờ curb nhẹ nhàng ở các khúc cua
       if ((c / 2) % 3 === 2) continue;
@@ -431,29 +460,37 @@ export class TrackGenerator {
       const point = safeGetPointAt(curve, t);
       const tangent = safeGetTangentAt(curve, t);
       const normal = new THREE.Vector3().crossVectors(tangent, up).normalize();
+      _curbQuat.setFromUnitVectors(_zFwd, tangent);
 
       const isCurb1 = (c / 2) % 2 === 0;
-      const currentCurbMat = isCurb1 ? curbMat1 : curbMat2;
 
       // Left curb
-      const pLeft = point.clone().addScaledVector(normal, trackWidth / 2 + 0.4);
-      const curbLeft = new THREE.Mesh(curbGeo, currentCurbMat);
-      curbLeft.position.set(pLeft.x, pLeft.y + 0.15, pLeft.z);
-      curbLeft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
-      sceneryGroup.add(curbLeft);
-      curbMeshes.push(curbLeft);
+      _curbPos.copy(point).addScaledVector(normal, trackWidth / 2 + 0.4);
+      _curbPos.y += 0.15;
+      _curbMat4.compose(_curbPos, _curbQuat, _curbScale);
+      if (isCurb1) {
+        instancedCurb1.setMatrixAt(idxCurb1++, _curbMat4);
+      } else {
+        instancedCurb2.setMatrixAt(idxCurb2++, _curbMat4);
+      }
 
       // Right curb
-      const pRight = point.clone().addScaledVector(normal, -trackWidth / 2 - 0.4);
-      const curbRight = new THREE.Mesh(curbGeo, currentCurbMat);
-      curbRight.position.set(pRight.x, pRight.y + 0.15, pRight.z);
-      curbRight.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
-      sceneryGroup.add(curbRight);
-      curbMeshes.push(curbRight);
+      _curbPos.copy(point).addScaledVector(normal, -trackWidth / 2 - 0.4);
+      _curbPos.y += 0.15;
+      _curbMat4.compose(_curbPos, _curbQuat, _curbScale);
+      if (isCurb1) {
+        instancedCurb1.setMatrixAt(idxCurb1++, _curbMat4);
+      } else {
+        instancedCurb2.setMatrixAt(idxCurb2++, _curbMat4);
+      }
     }
 
+    instancedCurb1.instanceMatrix.needsUpdate = true;
+    instancedCurb2.instanceMatrix.needsUpdate = true;
+    curbMeshes.push(instancedCurb1 as any, instancedCurb2 as any);
+
     // =========================================================================
-    // ĐƯỜNG HẦM TỐC ĐỘ CAO (HIGH-SPEED NEON TUNNEL) - XUẤT HIỆN TRÊN MỌI BẢN ĐỒ!
+    // ĐƯỜNG HẦM TỐC ĐỘ CAO (HIGH-SPEED NEON TUNNEL) - TỐI ƯU HÓA INSTANCEDMESH
     // Khoảng cách từ t = 0.62 đến t = 0.76 (~5km dài)
     // =========================================================================
     const tunnelStartT = 0.62;
@@ -466,25 +503,50 @@ export class TrackGenerator {
     const neonGlowMat = new THREE.MeshBasicMaterial({ color: biome.lampColor || 0x00f0ff }); // Neon Glow theo bản đồ
     const neonSideGlowMat = new THREE.MeshBasicMaterial({ color: biome.centerLineColor || 0xff007f }); // Neon Accent theo bản đồ
 
+    const archRingsMesh = new THREE.InstancedMesh(archRingGeo, archMatDark, tunnelRingsCount + 1);
+    archRingsMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+    const evenCeilingCount = Math.floor(tunnelRingsCount / 2) + 1;
+    const oddCeilingCount = Math.ceil(tunnelRingsCount / 2);
+    const ceilingNeonEvenMesh = new THREE.InstancedMesh(neonLightGeo, neonGlowMat, Math.max(1, evenCeilingCount));
+    const ceilingNeonOddMesh = new THREE.InstancedMesh(neonLightGeo, neonSideGlowMat, Math.max(1, oddCeilingCount));
+    ceilingNeonEvenMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    ceilingNeonOddMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+
+    let evenIdx = 0;
+    let oddIdx = 0;
+
+    const _archMat4 = new THREE.Matrix4();
+    const _archPos = new THREE.Vector3();
+    const _archQuat = new THREE.Quaternion();
+    const _archRotZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    const _neonMat4 = new THREE.Matrix4();
+    const _neonPos = new THREE.Vector3();
+    const _neonQuat = new THREE.Quaternion();
+    const _xUnit = new THREE.Vector3(1, 0, 0);
+
     for (let r = 0; r <= tunnelRingsCount; r++) {
       const ringT = tunnelStartT + (r / tunnelRingsCount) * (tunnelEndT - tunnelStartT);
       const ringPos = safeGetPointAt(curve, ringT);
       const ringTan = safeGetTangentAt(curve, ringT);
-      const up = new THREE.Vector3(0, 1, 0);
-      const ringNorm = new THREE.Vector3().crossVectors(ringTan, up).normalize();
+      const ringUp = new THREE.Vector3(0, 1, 0);
+      const ringNorm = new THREE.Vector3().crossVectors(ringTan, ringUp).normalize();
 
       // Vòm hầm Torus Arch
-      const archRing = new THREE.Mesh(archRingGeo, archMatDark);
-      archRing.position.set(ringPos.x, ringPos.y + 0.2, ringPos.z);
-      archRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), ringTan);
-      archRing.rotation.z = Math.PI / 2;
-      sceneryGroup.add(archRing);
+      _archPos.set(ringPos.x, ringPos.y + 0.2, ringPos.z);
+      _archQuat.setFromUnitVectors(_zFwd, ringTan).multiply(_archRotZ);
+      _archMat4.compose(_archPos, _archQuat, _curbScale);
+      archRingsMesh.setMatrixAt(r, _archMat4);
 
       // Thanh đèn LED Neon trên nóc hầm
-      const ceilingNeon = new THREE.Mesh(neonLightGeo, (r % 2 === 0) ? neonGlowMat : neonSideGlowMat);
-      ceilingNeon.position.set(ringPos.x, ringPos.y + (trackWidth / 2 + 1.2), ringPos.z);
-      ceilingNeon.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), ringNorm);
-      sceneryGroup.add(ceilingNeon);
+      _neonPos.set(ringPos.x, ringPos.y + (trackWidth / 2 + 1.2), ringPos.z);
+      _neonQuat.setFromUnitVectors(_xUnit, ringNorm);
+      _neonMat4.compose(_neonPos, _neonQuat, _curbScale);
+      if (r % 2 === 0) {
+        ceilingNeonEvenMesh.setMatrixAt(evenIdx++, _neonMat4);
+      } else {
+        ceilingNeonOddMesh.setMatrixAt(oddIdx++, _neonMat4);
+      }
 
       // Cổng chào ĐẦU HẦM TỐC ĐỘ CAO (Entrance Portal)
       if (r === 0) {
@@ -529,6 +591,11 @@ export class TrackGenerator {
       }
     }
 
+    archRingsMesh.instanceMatrix.needsUpdate = true;
+    ceilingNeonEvenMesh.instanceMatrix.needsUpdate = true;
+    ceilingNeonOddMesh.instanceMatrix.needsUpdate = true;
+    sceneryGroup.add(archRingsMesh, ceilingNeonEvenMesh, ceilingNeonOddMesh);
+
     // Start/Finish Arch Gantry (Cổng xuất phát & đích)
     const startPoint = safeGetPointAt(curve, 0);
     const startTangent = safeGetTangentAt(curve, 0);
@@ -572,8 +639,8 @@ export class TrackGenerator {
     archGroup.add(p1, p2, crossbar, banner);
     sceneryGroup.add(archGroup);
 
-    // Ground terrain plane (Mặt đất mở rộng 35000x35000 bao quát toàn bộ đường đua 35km)
-    const groundGeo = new THREE.PlaneGeometry(35000, 35000, 48, 48);
+    // Ground terrain plane (Mặt đất mở rộng 35000x35000 bao quát toàn bộ đường đua 35km - 8x8 subdivisions tối ưu)
+    const groundGeo = new THREE.PlaneGeometry(35000, 35000, 8, 8);
     const groundMat = new THREE.MeshStandardMaterial({
       color: biome.groundColor,
       roughness: 0.9,

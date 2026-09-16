@@ -234,9 +234,9 @@ export class RacingInstance {
     const rawBiome = { ...BIOMES[biomeIndex], roadLayoutType: ROAD_LAYOUT_PRESETS[layoutIndex].id };
     const biome = customizeBiomeBySeed(rawBiome, seed);
 
-    // Apply Biome Atmosphere - luôn sáng rực rỡ, độ tương phản cao
+    // Apply Biome Atmosphere - luôn sáng rực rỡ, sương mù tuyến tính đẩy xa tới 28000m không làm đứt đoạn đường
     this.scene.background = new THREE.Color(biome.skyColor);
-    this.scene.fog = new THREE.FogExp2(biome.fogColor, biome.fogDensity);
+    this.scene.fog = new THREE.Fog(biome.fogColor, 5000, 28000);
     this.dirLight.intensity = Math.max(2.2, biome.lightIntensity || 2.4);
     this.hemiLight.color.setHex(biome.ambientColor);
     this.hemiLight.intensity = 1.35;
@@ -366,7 +366,7 @@ export class RacingInstance {
     const biome = customizeBiomeBySeed(rawBiome, this.seedData.seed);
     this.seedData.biome = biome;
     this.scene.background = new THREE.Color(biome.skyColor);
-    this.scene.fog = new THREE.FogExp2(biome.fogColor, biome.fogDensity);
+    this.scene.fog = new THREE.Fog(biome.fogColor, 5000, 28000);
     this.dirLight.intensity = Math.max(2.2, biome.lightIntensity || 2.4);
     this.hemiLight.color.setHex(biome.ambientColor);
     this.hemiLight.intensity = 1.35;
@@ -402,17 +402,7 @@ export class RacingInstance {
         aiAggressionGlobal
       );
 
-      // 2. Sort ranks by total distance
-      const sorted = [...this.cars].sort((a, b) => {
-        const distA = a.state.lap + a.state.lapProgress;
-        const distB = b.state.lap + b.state.lapProgress;
-        return distB - distA;
-      });
-      sorted.forEach((car, index) => {
-        car.state.rank = index + 1;
-      });
-
-      // 3. Update Camera Director
+      // 2. Update Camera Director
       this.cameraDirector.update(
         this.cars,
         delta,
