@@ -5,7 +5,7 @@ export type ResolutionPreset = '1080x1920 (Full HD Dọc)' | '720x1280 (HD Dọc
 export type AspectRatioOption = '9:16' | '16:9';
 export type VideoFileFormat = 'mp4' | 'mov' | 'webm';
 export type FPSOption = 30 | 60 | 120;
-export type VideoDurationPreset = 30 | 60 | 120 | number;
+export type VideoDurationPreset = 30 | 60 | 70 | 120 | number;
 
 export enum CameraMode {
   // === CÁC GÓC QUAY TRUYỀN HÌNH TẬP TRUNG VÀO XE & NHIỀU XE ĐUA ===

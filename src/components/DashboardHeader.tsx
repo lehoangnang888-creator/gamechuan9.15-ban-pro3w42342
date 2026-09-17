@@ -185,6 +185,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                 >
                   <option value={30}>30s (Nhanh)</option>
                   <option value={60}>60s (1 Phút)</option>
+                  <option value={70}>70s (1.10s / 1p10s)</option>
                   <option value={120}>120s (2 Phút)</option>
                 </select>
               )}

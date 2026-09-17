@@ -60,7 +60,8 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   const fpsOptions: FPSOption[] = [60, 30, 120];
   const durationOptions = [
     { label: '30s (~60MB)', value: 30 },
-    { label: '60s (Chuẩn 120MB)', value: 60 },
+    { label: '60s (1 Phút)', value: 60 },
+    { label: '70s (1.10s)', value: 70 },
     { label: '120s (2 Phút)', value: 120 }
   ];
 
@@ -329,7 +330,7 @@ pause
         <label className="block text-xs font-semibold text-slate-300">
           Chu Kỳ Tự Động Cắt Video:
         </label>
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {durationOptions.map(d => (
             <button
               key={d.value}

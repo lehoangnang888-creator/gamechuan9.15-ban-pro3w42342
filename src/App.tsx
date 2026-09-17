@@ -416,7 +416,7 @@ export default function App() {
           if (engineRef.current) {
             engineRef.current.updateInstanceCount(config.instanceCount, duration, config.carsPerRace);
           }
-          addLog('info', `Đã thay đổi thời lượng xuất video thành: ${duration} giây (${duration === 120 ? '2 Phút' : duration === 60 ? '1 Phút' : 'Nhanh'})`);
+          addLog('info', `Đã thay đổi thời lượng xuất video thành: ${duration} giây (${duration === 120 ? '2 Phút' : duration === 70 ? '1 Phút 10s (1.10s)' : duration === 60 ? '1 Phút' : '30s Nhanh'})`);
         }}
         processingCount={processingCount}
         processingProgress={processingProgress}

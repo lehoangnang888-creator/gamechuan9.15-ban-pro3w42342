@@ -230,7 +230,10 @@ pause
                           {isProcessing ? 'Đang tạo...' : `${job.sizeMB} MB`}
                         </span>
                         <span className="text-cyan-400 font-bold">
-                          {job.durationSeconds || 120} giây ({Math.round((job.durationSeconds || 120) / 60)} phút) @ {job.fps || 60} FPS
+                          {(job.durationSeconds || 120) === 70
+                            ? '70 giây (1.10s)'
+                            : `${job.durationSeconds || 120} giây (${Math.round((job.durationSeconds || 120) / 60)} phút)`
+                          } @ {job.fps || 60} FPS
                         </span>
                       </div>
                     </div>
