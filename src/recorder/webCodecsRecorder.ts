@@ -358,17 +358,33 @@ export class WebCodecsVideoEncoderSession {
       : Math.round(1_000_000 / this.fps);
 
     try {
-      const videoFrame = new VideoFrame(canvas, {
+      // SỬ DỤNG createImageBitmap ĐỂ TẠO ẢNH CHỤP BẤT BIẾN (IMMUTABLE SNAPSHOT):
+      // Ngăn chặn triệt để lỗi Xé Hình (Screen Tearing) do GPU texture bị đọc bất đồng bộ trong khi canvas bị vẽ đè
+      let source: CanvasImageSource = canvas;
+      let bitmap: ImageBitmap | null = null;
+      if (typeof createImageBitmap !== 'undefined') {
+        try {
+          bitmap = await createImageBitmap(canvas);
+          source = bitmap;
+        } catch {
+          source = canvas;
+        }
+      }
+
+      const videoFrame = new VideoFrame(source, {
         timestamp: timestampMicros,
         duration: durationMicros
       });
 
-      // Tạo keyframe định kỳ (mỗi 60 frames)
+      // Tạo keyframe định kỳ (mỗi 60 frames chuẩn)
       const isKeyFrame = frameIndex % 60 === 0;
-      this.encoder.encode(videoFrame, { keyFrame: isKeyFrame });
+      this.encoder.encode(videoFrame, isKeyFrame ? { keyFrame: true } : undefined);
 
-      // Giải phóng ngay texture GPU để không tích tụ bộ nhớ RAM/VRAM
+      // Giải phóng ngay texture GPU và bitmap để không tích tụ bộ nhớ RAM/VRAM
       videoFrame.close();
+      if (bitmap) {
+        bitmap.close();
+      }
       this.frameCount++;
       return true;
     } catch (err) {
@@ -379,8 +395,9 @@ export class WebCodecsVideoEncoderSession {
 
   /**
    * Kết thúc tiến trình mã hóa, xả toàn bộ buffer video & âm thanh, tạo tệp Blob video hoàn chỉnh có âm thanh
+   * và hòa trộn giọng bình luận viên tiếng Anh của từng luồng đua
    */
-  async finalize(): Promise<{ blob: Blob; ext: 'mp4' | 'webm'; frameCount: number } | null> {
+  async finalize(instanceId: number = 1, seed: number = 632585): Promise<{ blob: Blob; ext: 'mp4' | 'webm'; frameCount: number } | null> {
     if (!this.encoder || this.frameCount === 0) {
       return null;
     }
@@ -393,10 +410,11 @@ export class WebCodecsVideoEncoderSession {
       }
 
       // 2. Mã hóa toàn bộ track âm thanh đua xe giả lập (F1/Hypercar roar, sang số, rít lốp bám đường)
+      // kết hợp giọng bình luận tiếng Anh chuẩn quốc tế
       if (this.audioEncoder && this.hasAudio && this.frameCount > 0) {
         try {
           const totalDuration = this.frameCount / this.fps;
-          const pcm = audioEngine.generateRacingAudioPCM(totalDuration, this.audioSampleRate);
+          const pcm = audioEngine.generateRacingAudioPCM(totalDuration, this.audioSampleRate, instanceId, seed);
           const chunkSize = 2048;
           const totalFrames = pcm.totalSamples;
 

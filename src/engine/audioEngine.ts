@@ -1,6 +1,9 @@
+import { commentarySoundManager, ScheduledCommentaryEvent } from './commentarySoundManager';
+
 /**
  * High-End Racing Audio Synthesizer Engine
- * Uses Web Audio API for synthetic engine roar, transmission whine, tire skid, and race SFX.
+ * Uses Web Audio API for synthetic engine roar, transmission whine, tire skid, race SFX,
+ * and broadcast English commentary voice mixing into live playback and video export streams.
  */
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -9,6 +12,7 @@ class AudioEngine {
 
   // Engine sound nodes
   private masterGain: GainNode | null = null;
+  private commentaryGain: GainNode | null = null;
   private engineOsc1: OscillatorNode | null = null;
   private engineOsc2: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
@@ -42,6 +46,11 @@ class AudioEngine {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.45, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
+
+      // Kênh âm lượng riêng cho giọng bình luận viên tiếng Anh
+      this.commentaryGain = this.ctx.createGain();
+      this.commentaryGain.gain.setValueAtTime(0.95, this.ctx.currentTime);
+      this.commentaryGain.connect(this.masterGain);
 
       // Cổng stream để thu âm thanh đồng bộ vào Video Recorder
       try {
@@ -114,6 +123,13 @@ class AudioEngine {
       this.masterGain.gain.setTargetAtTime(this.isMuted ? 0 : 0.45, this.ctx.currentTime, 0.05);
     }
     return this.isMuted;
+  }
+
+  setDucking(isDucking: boolean) {
+    if (this.masterGain && this.ctx && !this.isMuted) {
+      const targetGain = isDucking ? 0.22 : 0.45;
+      this.masterGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.08);
+    }
   }
 
   playCountdownBeep(isFinal: boolean = false) {
@@ -191,13 +207,54 @@ class AudioEngine {
   }
 
   /**
-   * Tạo chuỗi dữ liệu âm thanh PCM Stereo chất lượng cao giả lập tiếng động cơ F1 / Hypercar gầm rú,
-   * tăng tốc chuyển số, tiếng rít lốp bám đường cua và tiếng gió xé tốc độ 600 km/h cho file video xuất ra
+   * Phát trực tiếp đoạn âm thanh bình luận tiếng Anh qua Web Audio API
+   * Tự động giảm âm lượng động cơ (Audio Ducking) để giọng bình luận to, rõ ràng
    */
-  generateRacingAudioPCM(durationSeconds: number, sampleRate: number = 44100): { left: Float32Array; right: Float32Array; totalSamples: number } {
+  playCommentaryBuffer(buffer: AudioBuffer, onEnd?: () => void): AudioBufferSourceNode | null {
+    this.init();
+    if (!this.ctx || !this.commentaryGain || this.isMuted) return null;
+
+    try {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.commentaryGain);
+
+      // Giảm âm lượng động cơ xe đua trong suốt thời gian bình luận viên nói
+      this.setDucking(true);
+      source.onended = () => {
+        this.setDucking(false);
+        if (onEnd) onEnd();
+      };
+
+      source.start();
+      return source;
+    } catch (err) {
+      console.warn('Lỗi khi phát commentary buffer:', err);
+      this.setDucking(false);
+      return null;
+    }
+  }
+
+  /**
+   * Tạo chuỗi dữ liệu âm thanh PCM Stereo chất lượng cao giả lập tiếng động cơ F1 / Hypercar gầm rú,
+   * tăng tốc chuyển số, tiếng rít lốp bám đường cua và hòa trộn trực tiếp giọng bình luận tiếng Anh của luồng đua
+   */
+  generateRacingAudioPCM(
+    durationSeconds: number,
+    sampleRate: number = 44100,
+    instanceId: number = 1,
+    seed: number = 632585
+  ): { left: Float32Array; right: Float32Array; totalSamples: number; timeline: ScheduledCommentaryEvent[] } {
     const totalSamples = Math.floor(durationSeconds * sampleRate);
     const left = new Float32Array(totalSamples);
     const right = new Float32Array(totalSamples);
+
+    // Lấy kịch bản các đoạn bình luận tiếng Anh chuẩn truyền hình cho luồng này
+    const timeline = commentarySoundManager.getTimelineForInstance(instanceId, seed, durationSeconds);
 
     let phaseOsc1 = 0;
     let phaseOsc2 = 0;
@@ -208,6 +265,15 @@ class AudioEngine {
 
     for (let i = 0; i < totalSamples; i++) {
       const t = i / sampleRate;
+
+      // Kiểm tra xem thời điểm hiện tại có đang phát bình luận tiếng Anh không
+      let activeEvent: ScheduledCommentaryEvent | null = null;
+      for (const evt of timeline) {
+        if (t >= evt.startSec && t < evt.startSec + evt.durationSec) {
+          activeEvent = evt;
+          break;
+        }
+      }
 
       // Chu kỳ sang số và vào cua tự nhiên lặp lại mỗi 5.2 giây
       const cycleTime = t % 5.2;
@@ -272,8 +338,9 @@ class AudioEngine {
       // Tiếng xé gió rít tốc độ cao
       const windRush = (Math.random() * 2 - 1) * (0.02 + rpmNorm * 0.035);
 
-      // Tổng hợp tín hiệu
-      const rawSignal = (saw1 * 0.38 + tri1 * 0.26 + sub + turboWhine + backfire + tireScreech + windRush) * throttle;
+      // Tự động Ducking: khi bình luận viên đang nói, giảm âm lượng xe xuống 50% để giọng nói nổi bật
+      const duckMultiplier = activeEvent ? 0.48 : 1.0;
+      const rawSignal = (saw1 * 0.38 + tri1 * 0.26 + sub + turboWhine + backfire + tireScreech + windRush) * throttle * duckMultiplier;
 
       // Low-pass filter mô phỏng bộ giảm âm và tiêu âm thể thao
       const cutoff = 0.08 + rpmNorm * 0.22;
@@ -282,15 +349,27 @@ class AudioEngine {
 
       // Hiệu ứng Stereo không gian nhẹ
       const panOffset = Math.sin(t * 0.35) * 0.12;
-      const leftSample = filterStateL * (0.85 + panOffset) + tireScreech * 0.3;
-      const rightSample = filterStateR * (0.85 - panOffset) + tireScreech * 0.3;
+      let leftSample = filterStateL * (0.85 + panOffset) + tireScreech * 0.3;
+      let rightSample = filterStateR * (0.85 - panOffset) + tireScreech * 0.3;
+
+      // Hòa trộn trực tiếp giọng bình luận tiếng Anh vào 2 kênh Stereo
+      if (activeEvent && activeEvent.pcmLeft) {
+        const voiceOffsetSec = t - activeEvent.startSec;
+        const voiceSampleIdx = Math.floor(voiceOffsetSec * (activeEvent.sampleRate || sampleRate));
+        if (voiceSampleIdx >= 0 && voiceSampleIdx < activeEvent.pcmLeft.length) {
+          const vL = activeEvent.pcmLeft[voiceSampleIdx] * 1.5;
+          const vR = (activeEvent.pcmRight ? activeEvent.pcmRight[voiceSampleIdx] : activeEvent.pcmLeft[voiceSampleIdx]) * 1.5;
+          leftSample += vL;
+          rightSample += vR;
+        }
+      }
 
       // Soft Limiter (tanh) ngăn chặn hoàn toàn clipping âm thanh
-      left[i] = Math.tanh(leftSample * 1.45) * 0.78;
-      right[i] = Math.tanh(rightSample * 1.45) * 0.78;
+      left[i] = Math.tanh(leftSample * 1.35) * 0.82;
+      right[i] = Math.tanh(rightSample * 1.35) * 0.82;
     }
 
-    return { left, right, totalSamples };
+    return { left, right, totalSamples, timeline };
   }
 }
 

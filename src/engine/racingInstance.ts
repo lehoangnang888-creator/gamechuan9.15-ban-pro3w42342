@@ -388,9 +388,11 @@ export class RacingInstance {
     delta: number,
     aiAggressionGlobal: number = 0.85,
     cinematicAutoDirector: boolean = true
-  ): { chunkCompleted: boolean } {
+  ): { chunkCompleted: boolean; activeOvertakeCarId: string | null; collisionCarId: string | null } {
     this.chunkTimeElapsed += delta;
     const chunkCompleted = this.chunkTimeElapsed >= this.totalChunkDuration;
+    let activeOvertake: string | null = null;
+    let activeCollision: string | null = null;
 
     if (this.track && this.cars.length > 0) {
       // 1. Run vehicle physics & steering AI
@@ -401,6 +403,8 @@ export class RacingInstance {
         delta,
         aiAggressionGlobal
       );
+      activeOvertake = activeOvertakeCarId;
+      activeCollision = collisionCarId;
 
       // 2. Update Camera Director
       this.cameraDirector.update(
@@ -412,7 +416,7 @@ export class RacingInstance {
       );
     }
 
-    return { chunkCompleted };
+    return { chunkCompleted, activeOvertakeCarId: activeOvertake, collisionCarId: activeCollision };
   }
 
   getRuntimeState(): InstanceRuntime {

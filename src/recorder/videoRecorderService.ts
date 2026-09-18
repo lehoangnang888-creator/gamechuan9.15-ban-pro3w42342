@@ -5,6 +5,7 @@ import { SystemConfig, VideoRecordJob } from '../types';
 import { WebCodecsVideoEncoderSession } from './webCodecsRecorder';
 import { generateFamousDriversVideoFileName } from '../utils/naming';
 import { audioEngine } from '../engine/audioEngine';
+import { commentarySoundManager } from '../engine/commentarySoundManager';
 import fixWebmDuration from 'fix-webm-duration';
 
 export interface ExportProgressEvent {
@@ -180,6 +181,13 @@ export class VideoRecorderService {
     try {
       const targetFps = (config && config.fps) ? config.fps : 60;
       stream = canvas.captureStream(targetFps);
+
+      // Thêm Audio Track từ AudioEngine (âm thanh động cơ + bình luận viên tiếng Anh)
+      const audioTrack = audioEngine.getMediaStreamTrack();
+      if (audioTrack) {
+        stream.addTrack(audioTrack);
+      }
+
       mediaRecorder = new MediaRecorder(stream, {
         mimeType,
         videoBitsPerSecond: 8_000_000
@@ -242,11 +250,17 @@ export class VideoRecorderService {
       cam.aspect = 1080 / 1920;
       cam.updateProjectionMatrix();
 
+      dRenderer.autoClear = true;
       dRenderer.render(instance.scene, cam);
+
+      // Chờ GPU hoàn tất frame buffer tránh nhấp nháy
+      const gl = dRenderer.getContext();
+      if (gl && gl.finish) gl.finish();
 
       cam.aspect = oldAspect;
       cam.updateProjectionMatrix();
 
+      ctx.clearRect(0, 0, 1080, 1920);
       ctx.drawImage(dCanvas, 0, 0, 1080, 1920);
       rendered3D = true;
     } catch (err) {
@@ -430,23 +444,19 @@ export class VideoRecorderService {
       ctx.restore();
     }
 
-    // Dải gradient trên và dưới bảo đảm tương phản sắc nét (Sử dụng cache để không lag CPU)
-    if (!this.cachedTopGrad) {
-      this.cachedTopGrad = ctx.createLinearGradient(0, 0, 0, 260);
-      this.cachedTopGrad.addColorStop(0, 'rgba(0, 0, 0, 0.88)');
-      this.cachedTopGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.45)');
-      this.cachedTopGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    }
-    ctx.fillStyle = this.cachedTopGrad;
+    // Dải gradient trên và dưới bảo đảm tương phản sắc nét (Tạo trực tiếp trên ctx hiện tại tránh mismatch buffer)
+    const topGrad = ctx.createLinearGradient(0, 0, 0, 260);
+    topGrad.addColorStop(0, 'rgba(0, 0, 0, 0.88)');
+    topGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.45)');
+    topGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = topGrad;
     ctx.fillRect(0, 0, 1080, 260);
 
-    if (!this.cachedBottomGrad) {
-      this.cachedBottomGrad = ctx.createLinearGradient(0, 1600, 0, 1920);
-      this.cachedBottomGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      this.cachedBottomGrad.addColorStop(0.3, 'rgba(0, 0, 0, 0.65)');
-      this.cachedBottomGrad.addColorStop(1, 'rgba(0, 0, 0, 0.95)');
-    }
-    ctx.fillStyle = this.cachedBottomGrad;
+    const bottomGrad = ctx.createLinearGradient(0, 1600, 0, 1920);
+    bottomGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    bottomGrad.addColorStop(0.3, 'rgba(0, 0, 0, 0.65)');
+    bottomGrad.addColorStop(1, 'rgba(0, 0, 0, 0.95)');
+    ctx.fillStyle = bottomGrad;
     ctx.fillRect(0, 1600, 0, 320);
 
     ctx.save();
@@ -482,13 +492,11 @@ export class VideoRecorderService {
 
     const rpmRatio = Math.min(1.0, Math.max(0.2, (rpm - 3000) / 7500));
     const fillW = barW * rpmRatio;
-    if (!this.cachedRpmGrad) {
-      this.cachedRpmGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-      this.cachedRpmGrad.addColorStop(0, '#10b981');
-      this.cachedRpmGrad.addColorStop(0.65, '#f59e0b');
-      this.cachedRpmGrad.addColorStop(1, '#ef4444');
-    }
-    ctx.fillStyle = this.cachedRpmGrad;
+    const rpmGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+    rpmGrad.addColorStop(0, '#10b981');
+    rpmGrad.addColorStop(0.65, '#f59e0b');
+    rpmGrad.addColorStop(1, '#ef4444');
+    ctx.fillStyle = rpmGrad;
     ctx.fillRect(barX, barY, fillW, barH);
 
     // Đồng hồ tốc độ lớn
@@ -519,6 +527,56 @@ export class VideoRecorderService {
     ctx.fillStyle = '#fde047';
     ctx.font = 'bold 20px sans-serif';
     ctx.fillText('⚡ KÍCH HOẠT NITRO BOOST +60 KM/H • VƯỢT XE AN TOÀN', 40, 1890);
+
+    // 🎙️ Phụ đề bình luận viên truyền hình siêu hài hước trẻ trâu
+    try {
+      const commentaryTimeline = commentarySoundManager.getTimelineForInstance(instance.id, seed, totalSecs);
+      let activeCommentary: any = null;
+      for (const evt of commentaryTimeline) {
+        if (elapsedSecs >= evt.startSec && elapsedSecs < evt.startSec + evt.durationSec) {
+          activeCommentary = evt;
+          break;
+        }
+      }
+
+      if (activeCommentary) {
+        const subY = 1520;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+        ctx.fillRect(40, subY, 1000, 120);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(40, subY, 1000, 120);
+
+        // Badge BLV TRẺ TRÂU
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(52, subY + 12, 195, 26);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('🎙️ BLV TRẺ TRÂU', 58, subY + 30);
+
+        // Category badge & Driver badge
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 14px monospace';
+        ctx.fillText(`[${activeCommentary.type}] ${activeCommentary.driver ? `• ${activeCommentary.driver}` : ''}`, 260, subY + 30);
+
+        // Voice Subtitle Text (Hài hước, tự động ngắt dòng)
+        ctx.fillStyle = '#fef08a';
+        ctx.font = 'bold 20px sans-serif';
+        const subText = `"${activeCommentary.text}"`;
+        if (subText.length > 62) {
+          // Tìm khoảng trắng gần vị trí 60 để ngắt dòng đẹp
+          const splitIdx = subText.lastIndexOf(' ', 62);
+          const part1 = subText.substring(0, splitIdx > 20 ? splitIdx : 60);
+          const part2 = subText.substring(splitIdx > 20 ? splitIdx + 1 : 60);
+          ctx.fillText(part1, 52, subY + 68);
+          ctx.fillText(part2, 52, subY + 98);
+        } else {
+          ctx.fillText(subText, 52, subY + 76);
+        }
+      }
+    } catch {
+      // Ignore subtitle errors
+    }
 
     ctx.restore();
   }
@@ -713,6 +771,13 @@ export class VideoRecorderService {
     const { canvas: compCanvas, ctx: compCtx } = this.getCompositeCanvas();
     const { canvas: dCanvas, renderer: dRenderer } = this.getDirectRenderer();
 
+    // Tải và giải mã sẵn toàn bộ kho âm thanh bình luận viên tiếng Anh vào RAM
+    try {
+      await commentarySoundManager.preloadAll();
+    } catch {
+      // Bỏ qua lỗi mạng nếu có
+    }
+
     // 1. Thử nghiệm WebCodecs Pipeline với MP4 AVC hoặc WebM VP9/VP8 ở Bitrate cao (20 Mbps) cho video cực nét ~120MB
     let webCodecsSuccess = false;
     let finalBlob: Blob | null = null;
@@ -735,12 +800,18 @@ export class VideoRecorderService {
             cam.aspect = 1080 / 1920;
             cam.updateProjectionMatrix();
 
+            dRenderer.autoClear = true;
             dRenderer.render(offlineInstance.scene, cam);
+
+            // Đồng bộ hoá phần cứng GPU, tránh chớp nháy (Flickering) giữa các khung hình
+            const gl = dRenderer.getContext();
+            if (gl && gl.finish) gl.finish();
 
             cam.aspect = oldAspect;
             cam.updateProjectionMatrix();
 
-            // Sao chép sang 2D Canvas và vẽ HUD
+            // Xóa sạch canvas trung gian trước khi vẽ khung hình mới
+            compCtx.clearRect(0, 0, 1080, 1920);
             compCtx.drawImage(dCanvas, 0, 0, 1080, 1920);
             const simulatedElapsedSecs = (f + 1) * fixedDelta;
             this.drawBroadcastHUD(compCtx, offlineInstance, config, simulatedElapsedSecs, effectiveDuration);
@@ -764,7 +835,7 @@ export class VideoRecorderService {
             }
           }
 
-          const finalizeRes = await session.finalize();
+          const finalizeRes = await session.finalize(instance.id, simSeed);
           if (finalizeRes && finalizeRes.blob) {
             finalBlob = finalizeRes.blob;
             fileExt = finalizeRes.ext;
@@ -784,10 +855,17 @@ export class VideoRecorderService {
               const oldAspect = cam.aspect;
               cam.aspect = 1080 / 1920;
               cam.updateProjectionMatrix();
+              dRenderer.autoClear = true;
               dRenderer.render(offlineInstance.scene, cam);
+
+              // Đồng bộ hoá phần cứng GPU, tránh chớp nháy (Flickering)
+              const gl = dRenderer.getContext();
+              if (gl && gl.finish) gl.finish();
+
               cam.aspect = oldAspect;
               cam.updateProjectionMatrix();
 
+              compCtx.clearRect(0, 0, 1080, 1920);
               compCtx.drawImage(dCanvas, 0, 0, 1080, 1920);
               const simulatedElapsedSecs = (f + 1) * fixedDelta;
               this.drawBroadcastHUD(compCtx, offlineInstance, config, simulatedElapsedSecs, effectiveDuration);
@@ -802,7 +880,7 @@ export class VideoRecorderService {
               }
               if (f % 60 === 0) await new Promise(r => setTimeout(r, 0));
             }
-            const finalizeRes = await webmSession.finalize();
+            const finalizeRes = await webmSession.finalize(instance.id, simSeed);
             if (finalizeRes && finalizeRes.blob) {
               finalBlob = finalizeRes.blob;
               fileExt = finalizeRes.ext;
@@ -997,7 +1075,7 @@ export class VideoRecorderService {
     customDurationSeconds?: number,
     onProgress?: (progress: ExportProgressEvent) => void
   ): Promise<VideoRecordJob[]> {
-    const targetCount = config?.instanceCount || 8;
+    const targetCount = config?.instanceCount || instances.length;
     const activeInstances = instances.slice(0, targetCount);
     const jobs: VideoRecordJob[] = [];
     const total = activeInstances.length;

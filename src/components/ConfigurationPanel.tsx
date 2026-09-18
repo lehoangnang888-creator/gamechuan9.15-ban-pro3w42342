@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Settings, Folder, Video, Sliders, Camera, Sparkles, FolderPlus, Download, Smartphone, Film, Check, Users, Gauge } from 'lucide-react';
+import { Settings, Folder, Video, Sliders, Camera, Sparkles, FolderPlus, Download, Smartphone, Film, Check, Users, Gauge, Mic, MicOff } from 'lucide-react';
 import { AspectRatioOption, FPSOption, ResolutionPreset, SystemConfig, VideoFileFormat } from '../types';
+import { commentaryEngine } from '../engine/commentaryEngine';
 
 interface ConfigurationPanelProps {
   config: SystemConfig;
@@ -22,6 +23,7 @@ export const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   const [selectedFps, setSelectedFps] = useState<FPSOption>(config.fps);
   const [selectedCars, setSelectedCars] = useState<number>(config.carsPerRace || 15);
   const [justApplied, setJustApplied] = useState<boolean>(false);
+  const [isCommentaryEnabled, setIsCommentaryEnabled] = useState<boolean>(commentaryEngine.getIsEnabled());
 
   const carScenarioOptions = [
     { count: 6, label: '6 Xe Đua', desc: 'Đua nhóm tinh gọn, bám đuổi kịch tính' },
@@ -351,7 +353,35 @@ pause
         </p>
       </div>
 
-      {/* 5. Thư mục lưu trữ trên máy tính Windows */}
+      {/* 5. Bình Luận Viên Trực Tiếp Tiếng Việt */}
+      <div className="space-y-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800">
+        <div className="flex items-center justify-between">
+          <label className="flex items-center gap-1.5 text-xs font-bold text-rose-300">
+            <Mic className="w-3.5 h-3.5 text-rose-400" />
+            Bình Luận Viên Tiếng Việt:
+          </label>
+          <button
+            id="btn-sidebar-toggle-commentary"
+            onClick={() => {
+              const next = commentaryEngine.toggle();
+              setIsCommentaryEnabled(next);
+            }}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ${
+              isCommentaryEnabled
+                ? 'bg-rose-950/80 text-rose-300 border-rose-500/50 shadow-sm'
+                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+            }`}
+          >
+            {isCommentaryEnabled ? <Mic className="w-3 h-3 text-rose-400" /> : <MicOff className="w-3 h-3 text-slate-500" />}
+            <span>{isCommentaryEnabled ? 'ĐANG BẬT' : 'ĐÃ TẮT'}</span>
+          </button>
+        </div>
+        <p className="text-[10.5px] text-slate-400">
+          BLV AI tự động phát giọng đọc tiếng Việt và hiển thị phụ đề theo từng pha vượt mặt, ôm cua Drift, bứt tốc Nitro và về đích. Tiếng động cơ tự động hạ nhỏ (Audio Ducking) để giọng nói luôn rõ nét.
+        </p>
+      </div>
+
+      {/* 6. Thư mục lưu trữ trên máy tính Windows */}
       <div className="space-y-2 p-3 rounded-lg bg-slate-950/80 border border-slate-800">
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
           <Folder className="w-4 h-4 text-cyan-400" />

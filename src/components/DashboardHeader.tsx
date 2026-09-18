@@ -1,9 +1,10 @@
 /**
  * Dashboard Header Component - Racing Video Factory
  */
-import React from 'react';
-import { Play, Square, Pause, HardDrive, Cpu, Film, Terminal, HelpCircle, Video, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Square, Pause, HardDrive, Cpu, Film, Terminal, HelpCircle, Video, Loader2, Mic, MicOff } from 'lucide-react';
 import { SystemConfig, SystemHardwareStats } from '../types';
+import { commentaryEngine } from '../engine/commentaryEngine';
 
 interface DashboardHeaderProps {
   isRunning: boolean;
@@ -48,6 +49,12 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   processingProgress = null,
   completedVideosCount
 }) => {
+  const [isCommentaryOn, setIsCommentaryOn] = useState<boolean>(commentaryEngine.getIsEnabled());
+
+  const handleToggleCommentary = () => {
+    const next = commentaryEngine.toggle();
+    setIsCommentaryOn(next);
+  };
   return (
     <header className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 select-none">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
@@ -207,6 +214,34 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
                   ? `[${processingCount} đang xuất: ${processingProgress}%]`
                   : `[${processingCount} đang xuất...]`}
               </span>
+            )}
+          </button>
+
+          {/* Bật/Tắt Bình Luận Viên Trẻ Trâu Hài Hước cho cả 10 luồng */}
+          <button
+            id="btn-toggle-commentary"
+            onClick={handleToggleCommentary}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border transition active:scale-95 cursor-pointer ${
+              isCommentaryOn
+                ? 'bg-amber-950/70 border-amber-500/50 text-amber-300 shadow-md shadow-amber-950/60'
+                : 'bg-slate-800/90 border-slate-700 text-slate-400 hover:text-slate-200'
+            }`}
+            title="Bật/Tắt Bình Luận Viên Phong Cách Trẻ Trâu Hài Hước (10 Luồng 10 Chất Giọng & Câu Chuyện Chế Riêng Biệt) tích hợp vào âm thanh và video xuất"
+          >
+            {isCommentaryOn ? (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                <Mic className="w-3.5 h-3.5 text-amber-400" />
+                <span>BLV HÀI HƯỚC: BẬT</span>
+              </>
+            ) : (
+              <>
+                <MicOff className="w-3.5 h-3.5 text-slate-500" />
+                <span>BLV HÀI HƯỚC: TẮT</span>
+              </>
             )}
           </button>
         </div>

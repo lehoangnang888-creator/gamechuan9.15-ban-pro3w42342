@@ -462,12 +462,13 @@ export class CameraDirector {
 
       // 1. Phía Sau Xe: Ôm cua mượt mà tự nhiên, hướng lượn theo đuôi xe, giữ phẳng đường chân trời (Horizon Locking)
       case CameraMode.BEHIND: {
-        camSmoothSpeed = 16.0; // Giảm chấn mượt mà, không bị cứng nhắc
-        const dist = 22.0; 
-        const height = 5.2; 
+        camSmoothSpeed = 18.0;
+        // Kéo camera gần hơn (13m thay vì 22m), hạ độ cao (2.8m thay vì 5.2m) để tạo hiệu ứng xé gió cực mạnh ở 600km/h
+        const dist = 13.0; 
+        const height = 2.8; 
         idealPos.copy(trackedPos).addScaledVector(forward, -dist).addScaledVector(up, height);
-        idealPos.y = Math.max(idealPos.y, trackedPos.y + 1.8);
-        lookTarget.copy(trackedPos).addScaledVector(forward, 16.0).addScaledVector(up, 1.0);
+        idealPos.y = Math.max(idealPos.y, trackedPos.y + 1.4);
+        lookTarget.copy(trackedPos).addScaledVector(forward, 22.0).addScaledVector(up, 1.1);
         break;
       }
 
@@ -595,78 +596,85 @@ export class CameraDirector {
     // =========================================================================
     const speedRatio = Math.min(1.0, currentSpeed / 610);
     let modeBaseFov = this.BASE_FOV;
-    let speedFovBoost = Math.pow(speedRatio, 1.25) * 18.0;
+    let speedFovBoost = Math.pow(speedRatio, 1.1) * 22.0;
 
     if (this.currentMode === CameraMode.CHOPPER_HELI_CHASE) {
-      modeBaseFov = 48.0; // Góc quay Trực thăng truyền hình từ xa
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 4.0;
+      modeBaseFov = 52.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 10.0;
     } else if (this.currentMode === CameraMode.SKY_DRONE_BROADCAST) {
-      modeBaseFov = 64.0; // Góc Drone bay lượn FPV
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 6.0;
+      modeBaseFov = 68.0; // Góc Drone FPV lướt sát
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 16.0;
     } else if (this.currentMode === CameraMode.PANORAMIC) {
-      modeBaseFov = 44.0; // Góc toàn cảnh từ trên cao
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 2.0;
+      modeBaseFov = 48.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 8.0;
     } else if (this.currentMode === CameraMode.VERTICAL_PORTRAIT_OPTIMIZED) {
-      modeBaseFov = 58.0; // Khung hình 9:16 tối ưu cho màn hình điện thoại
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 5.0;
+      modeBaseFov = 64.0; // Khung hình dọc 9:16 cảm nhận tốc độ lướt
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 18.0;
     } else if (this.currentMode === CameraMode.LOW_GROUND || this.currentMode === CameraMode.KERB_CAM_GROUND) {
-      modeBaseFov = 72.0; // Sát mặt đường & âm vỉa tốc độ cực cao
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 14.0;
+      modeBaseFov = 78.0; // Sát mặt đường xé gió
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 24.0;
     } else if (this.currentMode === CameraMode.MULTI_CAR_OVERTAKE_WIDE) {
-      modeBaseFov = 54.0;
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 4.0;
+      modeBaseFov = 58.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 12.0;
     } else if (this.currentMode === CameraMode.MULTI_CAR_FRONT_FACING) {
-      modeBaseFov = 62.0;
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 5.0;
+      modeBaseFov = 66.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 14.0;
     } else if (this.currentMode === CameraMode.MULTI_CAR_PACK_CHASE) {
-      modeBaseFov = 55.0;
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 4.0;
+      modeBaseFov = 62.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 15.0;
     } else if (this.currentMode === CameraMode.SIDE_CHASE_MULTI) {
-      modeBaseFov = 50.0;
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 4.0;
+      modeBaseFov = 58.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 14.0;
     } else if (this.currentMode === CameraMode.SPECTATOR_TRACKSIDE) {
-      // Khán giả ven đường: tự động zoom ống kính tùy khoảng cách xe để bắt trọn khung hình xe cực đẹp
       const distToCam = this.smoothedCamPos.distanceTo(trackedPos);
       const zoomFactor = THREE.MathUtils.clamp((distToCam - 15.0) / 100.0, 0.0, 1.0);
-      modeBaseFov = THREE.MathUtils.lerp(52.0, 18.0, zoomFactor);
-      speedFovBoost = 0;
+      modeBaseFov = THREE.MathUtils.lerp(58.0, 22.0, zoomFactor);
+      speedFovBoost = Math.pow(speedRatio, 1.2) * 6.0;
     } else if (this.currentMode === CameraMode.BEHIND) {
-      // Góc phía sau xe lùi xa 100m: FOV rộng 56 độ bao quát xe và đoàn đua
-      modeBaseFov = 56.0; 
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 4.0;
-    } else if (this.currentMode === CameraMode.COCKPIT_FIRST_PERSON) {
-      modeBaseFov = 78.0; // Khoang lái điện ảnh góc rộng chân thực
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 15.0; // Hiệu ứng kéo dãn không gian cực đã
-    } else if (this.currentMode === CameraMode.BUMPER_FIRST_PERSON) {
-      modeBaseFov = 88.0; // Góc cản trước xé gió siêu tốc
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 22.0; // Kéo dãn cực hạn lên tới 110 FOV!
-    } else if (this.currentMode === CameraMode.TRACKSIDE_TELEPHOTO) {
-      modeBaseFov = 28.0; 
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 3.0;
-    } else if (this.currentMode === CameraMode.TRACKSIDE_APEX) {
-      modeBaseFov = 62.0; 
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 8.0;
-    } else if (this.currentMode === CameraMode.CINEMATIC_ORBIT) {
+      // Góc phía sau xe: FOV 65 độ + tăng tới 24 độ khi 600km/h (tổng FOV gần 90 độ), tạo cảm giác warp-speed siêu xe
       modeBaseFov = 65.0; 
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 6.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 24.0;
+    } else if (this.currentMode === CameraMode.COCKPIT_FIRST_PERSON) {
+      modeBaseFov = 82.0; // Khoang lái góc rộng
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 25.0;
+    } else if (this.currentMode === CameraMode.BUMPER_FIRST_PERSON) {
+      modeBaseFov = 90.0; // Góc cản trước xé gió siêu tốc
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 28.0;
+    } else if (this.currentMode === CameraMode.TRACKSIDE_TELEPHOTO) {
+      modeBaseFov = 32.0; 
+      speedFovBoost = Math.pow(speedRatio, 1.2) * 6.0;
+    } else if (this.currentMode === CameraMode.TRACKSIDE_APEX) {
+      modeBaseFov = 68.0; 
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 18.0;
+    } else if (this.currentMode === CameraMode.CINEMATIC_ORBIT) {
+      modeBaseFov = 68.0; 
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 14.0;
     } else if (this.currentMode === CameraMode.PASSING_STATIONARY) {
-      modeBaseFov = 74.0; 
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 16.0;
+      modeBaseFov = 78.0; 
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 22.0;
     } else if (this.currentMode === CameraMode.TUNNEL_CEILING_FAST) {
-      modeBaseFov = 75.0;
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 12.0;
+      modeBaseFov = 78.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 18.0;
     } else if (this.currentMode === CameraMode.FENDER_WHEEL_LOOK || this.currentMode === CameraMode.WING_REAR_LOOK) {
-      modeBaseFov = 72.0;
-      speedFovBoost = Math.pow(speedRatio, 1.25) * 10.0;
+      modeBaseFov = 76.0;
+      speedFovBoost = Math.pow(speedRatio, 1.1) * 18.0;
     }
 
     const targetFov = modeBaseFov + speedFovBoost;
-    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, Math.min(1.0, delta * 5.0));
+    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, Math.min(1.0, delta * 6.0));
     this.camera.updateProjectionMatrix();
 
-    // Ổn định quang học chuẩn Gimbal F1 (Shotover / Cineflex):
-    // Giữ camera hoàn toàn tĩnh mượt, triệt tiêu 100% rung giật vi chấn làm xao động xe
-    this.camera.position.copy(this.smoothedCamPos);
+    // Rung máy quay vi chấn khí động học tốc độ cao (Speed Aerodynamic Vibration):
+    // Khi tốc độ trên 350 km/h, áp lực gió cực lớn tạo độ rung nhẹ tự nhiên cho ống kính máy quay
+    let finalCamPos = this.smoothedCamPos.clone();
+    if (currentSpeed > 350) {
+      const shakeIntensity = Math.pow((currentSpeed - 350) / 300, 1.5) * 0.045;
+      const shakeX = (Math.sin(performance.now() * 0.045) + Math.sin(performance.now() * 0.078)) * shakeIntensity;
+      const shakeY = (Math.cos(performance.now() * 0.052) + Math.cos(performance.now() * 0.091)) * shakeIntensity * 0.6;
+      finalCamPos.addScaledVector(right, shakeX).addScaledVector(up, shakeY);
+    }
+
+    this.camera.position.copy(finalCamPos);
     this.camera.lookAt(this.smoothedLookTarget);
 
     return this.currentMode;

@@ -506,7 +506,7 @@ export class VehiclePhysicsSystem {
       s.steerAngle = THREE.MathUtils.lerp(s.steerAngle, steerDiff * 1.1, Math.min(1.0, delta * 12.0));
 
       // Tốc độ di chuyển thực tế trên đường đua (tỉ lệ chuẩn mượt mà 1.85x, loại bỏ hoàn toàn rung giật)
-      const speedUnitsPerSec = (s.speed * 1000 / 3600) * 1.85;
+      const speedUnitsPerSec = (s.speed * 1000 / 3600) * 2.4;
       const progressDelta = (speedUnitsPerSec * delta) / totalLength;
 
       s.lapProgress += progressDelta;

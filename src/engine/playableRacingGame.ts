@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { safeGetPointAt, safeGetTangentAt, getSafeCurveU } from './curveUtils';
 import { audioEngine } from './audioEngine';
+import { commentaryEngine } from './commentaryEngine';
 import { carModelManager } from './carModelManager';
 import { generatePointsForLayout } from './trackLayouts';
 import { getTrackVisualTheme, createRoadTexture } from './trackThemes';
@@ -152,6 +153,7 @@ export class PlayableRacingGame {
   public lastLapTime: number = 0;
   public isWrongWay: boolean = false;
   public totalLaps: number = 3;
+  private prevPlayerRank: number = 8;
 
   // Performance Profiler (F3)
   public frameTimes: number[] = [];
@@ -845,9 +847,23 @@ export class PlayableRacingGame {
       if (this.countdownTimer <= 0) {
         this.raceState = 'RACING';
         audioEngine.playCountdownBeep(true);
+        commentaryEngine.triggerEvent('START', undefined, true);
       }
     } else if (this.raceState === 'RACING') {
       this.currentLapTime += delta;
+
+      // Bình luận viên tự động theo dõi diễn biến xe người chơi
+      const currentRank = this.getPlayerRank();
+      if (currentRank < this.prevPlayerRank) {
+        commentaryEngine.triggerEvent('OVERTAKE');
+      }
+      this.prevPlayerRank = currentRank;
+
+      if (this.playerSpeed > 450) {
+        commentaryEngine.triggerEvent('NITRO');
+      } else if (this.isDrifting && Math.abs(this.driftAngle) > 0.4) {
+        commentaryEngine.triggerEvent('DRIFT');
+      }
     }
 
     // 2. Physics & Player Car Update

@@ -33,9 +33,13 @@ import {
   Download,
   Video,
   ListOrdered,
-  X
+  X,
+  Mic,
+  MicOff
 } from 'lucide-react';
 import { generateFamousDriversVideoFileName, FAMOUS_5_DRIVERS, FULL_STARTING_GRID_DRIVERS, DriverGridEntry } from '../utils/naming';
+import { commentaryEngine } from '../engine/commentaryEngine';
+import { BroadcastCommentaryTicker } from './BroadcastCommentaryTicker';
 
 interface HighEndRacingViewProps {
   onSwitchToVideoFactory: () => void;
@@ -92,6 +96,7 @@ export function HighEndRacingView({ onSwitchToVideoFactory }: HighEndRacingViewP
   const [weather, setWeather] = useState<WeatherType>('SUNSET');
   const [assistMode, setAssistMode] = useState<DrivingAssistMode>('SPORT');
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isCommentaryOn, setIsCommentaryOn] = useState<boolean>(commentaryEngine.getIsEnabled());
   const [countdown, setCountdown] = useState<number>(3);
   const [isFinished, setIsFinished] = useState<boolean>(false);
   const [driverName, setDriverName] = useState<string>('Cristiano Ronaldo');
@@ -269,6 +274,12 @@ export function HighEndRacingView({ onSwitchToVideoFactory }: HighEndRacingViewP
       setRecordingSeconds(0);
 
       const stream = canvasRef.current.captureStream(60);
+      try {
+        const audioTrack = audioEngine.getMediaStreamTrack();
+        if (audioTrack) {
+          stream.addTrack(audioTrack);
+        }
+      } catch {}
       let mimeType = 'video/webm;codecs=vp9';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'video/webm';
@@ -557,6 +568,22 @@ export function HighEndRacingView({ onSwitchToVideoFactory }: HighEndRacingViewP
             {isMuted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
           </button>
 
+          {/* Bật/Tắt Bình Luận Viên Tiếng Việt */}
+          <button
+            onClick={() => {
+              const next = commentaryEngine.toggle();
+              setIsCommentaryOn(next);
+            }}
+            className={`p-2 rounded-lg border transition ${
+              isCommentaryOn
+                ? 'bg-rose-950/70 border-rose-500/50 text-rose-300'
+                : 'bg-black/60 border-slate-800 text-slate-500 hover:text-slate-300'
+            }`}
+            title="Bình Luận Viên Đua Xe Tiếng Việt (Bật/Tắt)"
+          >
+            {isCommentaryOn ? <Mic className="w-4 h-4 text-rose-400" /> : <MicOff className="w-4 h-4" />}
+          </button>
+
           {/* Reset Car */}
           <button
             onClick={handleResetCar}
@@ -575,6 +602,9 @@ export function HighEndRacingView({ onSwitchToVideoFactory }: HighEndRacingViewP
           </button>
         </div>
       </header>
+
+      {/* PHỤ ĐỀ BÌNH LUẬN TRỰC TIẾP TRUYỀN HÌNH */}
+      <BroadcastCommentaryTicker className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-full max-w-xl px-4" />
 
       {/* TOAST THÔNG BÁO TỰ ĐỘNG TẢI XUỐNG THÀNH CÔNG */}
       {downloadedNotification && (

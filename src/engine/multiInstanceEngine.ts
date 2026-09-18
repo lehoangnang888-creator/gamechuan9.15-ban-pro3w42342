@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RacingInstance } from './racingInstance';
 import { SystemConfig, CameraMode, RoadLayoutType } from '../types';
 import { audioEngine } from './audioEngine';
+import { commentaryEngine } from './commentaryEngine';
 
 export class MultiInstanceEngine {
   public renderer: THREE.WebGLRenderer | null = null;
@@ -162,6 +163,11 @@ export class MultiInstanceEngine {
     this.isPaused = false;
     this.lastFrameTime = performance.now();
 
+    // Kích hoạt bình luận viên tiếng Anh khai mạc chặng đua
+    setTimeout(() => {
+      commentaryEngine.triggerEvent('START', undefined, true);
+    }, 1200);
+
     const loop = (currentTime: number) => {
       if (!this.isRunning) return;
 
@@ -192,8 +198,20 @@ export class MultiInstanceEngine {
         // Update all active instances
         let primaryCar: any = null;
         for (const instance of this.instances.values()) {
-          const { chunkCompleted } = instance.update(delta, config.aiAggressionGlobal, config.cinematicAutoDirector);
+          const { chunkCompleted, activeOvertakeCarId, collisionCarId } = instance.update(
+            delta,
+            config.aiAggressionGlobal,
+            config.cinematicAutoDirector
+          );
+
+          if (activeOvertakeCarId) {
+            commentaryEngine.triggerEvent('OVERTAKE');
+          } else if (collisionCarId) {
+            commentaryEngine.triggerEvent('COLLISION');
+          }
+
           if (chunkCompleted) {
+            commentaryEngine.triggerEvent('FINISH');
             if (this.onChunkCompleted) {
               this.onChunkCompleted(instance);
             }
@@ -207,6 +225,12 @@ export class MultiInstanceEngine {
 
         // Synchronize ultra-powerful roaring engine & space-tearing whoosh with vehicle state
         if (primaryCar && primaryCar.state) {
+          if (primaryCar.state.isHyperBoosting) {
+            commentaryEngine.triggerEvent('NITRO');
+          } else if (primaryCar.state.isDrifting && Math.abs(primaryCar.state.driftAngle) > 0.35) {
+            commentaryEngine.triggerEvent('DRIFT');
+          }
+
           audioEngine.update(
             primaryCar.state.rpm || 3500,
             primaryCar.state.throttle || 0.8,

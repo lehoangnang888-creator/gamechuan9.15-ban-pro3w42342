@@ -58,8 +58,8 @@ export class TrackGenerator {
       normals.push(0, 1, 0);
       normals.push(0, 1, 0);
 
-      uvs.push(0, t * 480);
-      uvs.push(1, t * 480);
+      uvs.push(0, t * 1400);
+      uvs.push(1, t * 1400);
 
       if (i < segments) {
         const base = i * 2;
@@ -207,7 +207,7 @@ export class TrackGenerator {
     };
 
     // --- PROCEDURAL BOLLARD (CỌC TIÊU) GENERATION ---
-    const bollardCount = 100;
+    const bollardCount = 650;
     const bollardHeight = 1.0 + pRand() * 1.4; // Chiều cao từ 1.0m đến 2.4m ngẫu nhiên
     const bShapeType = Math.floor(pRand() * 5); // 5 kiểu hình tháp, trụ tròn, trụ vuông, lăng trụ
     const bRadiusBottom = 0.12 + pRand() * 0.16;
@@ -258,7 +258,7 @@ export class TrackGenerator {
     rightCapsMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
 
     // --- PROCEDURAL STREETLIGHTS (CỘT ĐÈN ĐƯỜNG) GENERATION ---
-    const tallPoleCount = 35;
+    const tallPoleCount = 180;
     const tallPoleHeight = 8.0 + pRand() * 7.0; // Chiều cao từ 8m đến 15m ngẫu nhiên
     const poleShapeType = Math.floor(pRand() * 4); // Tròn, Lục giác, Tứ giác, Bát giác
     const pRadBot = 0.18 + pRand() * 0.22;

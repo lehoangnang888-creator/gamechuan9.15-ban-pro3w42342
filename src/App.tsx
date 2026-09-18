@@ -11,6 +11,9 @@ import { SystemLogsModal } from './components/SystemLogsModal';
 import { WindowsSetupGuideModal } from './components/WindowsSetupGuideModal';
 import { AppleGameModal } from './components/AppleGameModal';
 import { HighEndRacingView } from './components/HighEndRacingView';
+import { BroadcastCommentaryTicker } from './components/BroadcastCommentaryTicker';
+import { commentaryEngine } from './engine/commentaryEngine';
+import { audioEngine } from './engine/audioEngine';
 import {
   CameraMode,
   InstanceRuntime,
@@ -110,6 +113,11 @@ export default function App() {
     
     // Tự động gắn kết Engine & Canvas ngay khi khởi động trang web
     videoRecorderService.bindEngine(engine, canvasRef.current);
+
+    // Kết nối giảm âm lượng tiếng xe gầm khi Bình luận viên nói chuyện (Audio Ducking)
+    commentaryEngine.setDuckingCallback((isDucking) => {
+      audioEngine.setDucking(isDucking);
+    });
 
     videoRecorderService.setOnJobCreated((job) => {
       setActiveJobs(prev => {
@@ -443,6 +451,9 @@ export default function App() {
 
         {/* Lưới hiển thị 3D đa khung hình */}
         <main className="flex-1 relative flex flex-col overflow-hidden bg-black">
+          {/* Phụ đề Bình luận viên Trực tiếp Truyền hình */}
+          <BroadcastCommentaryTicker className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-full max-w-xl px-4" />
+
           <InstanceGrid
             canvasRef={canvasRef}
             instances={instancesState}
